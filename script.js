@@ -1,103 +1,131 @@
-let totalAmount = document.getElementById("total-amount");
-let userAmount = document.getElementById("user-amount");
-const checkAmountButton = document.getElementById("check-amount");
-const totalAmountButton = document.getElementById("total-amount-button");
-const productTitle = document.getElementById("product-title");
-const errorMessage = document.getElementById("budget-error");
-const productTitleError = document.getElementById("product-title-error");
-const productCostError = document.getElementById("product-cost-error");
-const amount = document.getElementById("amount");
-const expenditureValue = document.getElementById("expenditure-value");
-const balanceValue = document.getElementById("balance-amount");
-const list = document.getElementById("list");
-let tempAmount = 0;
+const transactions = JSON.parse(localStorage.getItem("transactions")) || [];
+let budget = parseFloat(localStorage.getItem("budget")) || 0;
 
-//Set Budget Part
-totalAmountButton.addEventListener("click", () => {
-  tempAmount = totalAmount.value;
-  //empty or negative input
-  if (tempAmount === "" || tempAmount < 0) {
-    errorMessage.classList.remove("hide");
+const formatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  signDisplay: "always",
+});
+
+const list = document.getElementById("transactionList");
+const form = document.getElementById("transactionForm");
+const status = document.getElementById("status");
+const balance = document.getElementById("balance");
+const income = document.getElementById("income");
+const expense = document.getElementById("expense");
+const budgetForm = document.getElementById("budgetForm");
+const budgetAmount = document.getElementById("budgetAmount");
+const budgetDisplay = document.getElementById("budgetDisplay");
+
+form.addEventListener("submit", addTransaction);
+budgetForm.addEventListener("submit", setBudget);
+
+function updateTotal() {
+  const incomeTotal = transactions
+    .filter((trx) => trx.type === "income")
+    .reduce((total, trx) => total + trx.amount, 0);
+
+  const expenseTotal = transactions
+    .filter((trx) => trx.type === "expense")
+    .reduce((total, trx) => total + trx.amount, 0);
+
+  const balanceTotal = budget - expenseTotal;
+
+  balance.textContent = formatter.format(balanceTotal).substring(1);
+  income.textContent = formatter.format(incomeTotal);
+  expense.textContent = formatter.format(expenseTotal);
+
+  // Check if expenses exceed budget
+  if (budget && expenseTotal > budget) {
+    status.textContent = "You have exceeded your budget!";
+    status.style.color = "red";
   } else {
-    errorMessage.classList.add("hide");
-    //Set Budget
-    amount.innerHTML = tempAmount;
-    //Set Balance
-    balanceValue.innerText = tempAmount - expenditureValue.innerText;
-    //Clear Input Box
-    totalAmount.value = "";
+    status.textContent = "";
+    status.style.color = "black";
   }
-});
+}
 
-//Function To Disable Edit and Delete Button
-const disableButtons = (bool) => {
-  let editButtons = document.getElementsByClassName("edit");
-  Array.from(editButtons).forEach((element) => {
-    element.disabled = bool;
-  });
-};
+function renderList() {
+  list.innerHTML = "";
 
-//Function To Modify List Elements
-const modifyElement = (element, edit = false) => {
-  let parentDiv = element.parentElement;
-  let currentBalance = balanceValue.innerText;
-  let currentExpense = expenditureValue.innerText;
-  let parentAmount = parentDiv.querySelector(".amount").innerText;
-  if (edit) {
-    let parentText = parentDiv.querySelector(".product").innerText;
-    productTitle.value = parentText;
-    userAmount.value = parentAmount;
-    disableButtons(true);
+  status.textContent = "";
+  if (transactions.length === 0) {
+    status.textContent = "No transactions.";
+    return;
   }
-  balanceValue.innerText = parseInt(currentBalance) + parseInt(parentAmount);
-  expenditureValue.innerText =
-    parseInt(currentExpense) - parseInt(parentAmount);
-  parentDiv.remove();
-};
 
-//Function To Create List
-const listCreator = (expenseName, expenseValue) => {
-  let sublistContent = document.createElement("div");
-  sublistContent.classList.add("sublist-content", "flex-space");
-  list.appendChild(sublistContent);
-  sublistContent.innerHTML = `<p class="product">${expenseName}</p><p class="amount">${expenseValue}</p>`;
-  let editButton = document.createElement("button");
-  editButton.classList.add("fa-solid", "fa-pen-to-square", "edit");
-  editButton.style.fontSize = "1.2em";
-  editButton.addEventListener("click", () => {
-    modifyElement(editButton, true);
-  });
-  let deleteButton = document.createElement("button");
-  deleteButton.classList.add("fa-solid", "fa-trash-can", "delete");
-  deleteButton.style.fontSize = "1.2em";
-  deleteButton.addEventListener("click", () => {
-    modifyElement(deleteButton);
-  });
-  sublistContent.appendChild(editButton);
-  sublistContent.appendChild(deleteButton);
-  document.getElementById("list").appendChild(sublistContent);
-};
+  transactions.forEach(({ id, name, amount, date, type }) => {
+    const sign = "income" === type ? 1 : -1;
 
-//Function To Add Expenses
-checkAmountButton.addEventListener("click", () => {
-  //empty checks
-  if (!userAmount.value || !productTitle.value) {
-    productTitleError.classList.remove("hide");
-    return false;
-  }
-  //Enable buttons
-  disableButtons(false);
-  //Expense
-  let expenditure = parseInt(userAmount.value);
-  //Total expense (existing + new)
-  let sum = parseInt(expenditureValue.innerText) + expenditure;
-  expenditureValue.innerText = sum;
-  //Total balance(budget - total expense)
-  const totalBalance = tempAmount - sum;
-  balanceValue.innerText = totalBalance;
-  //Create list
-  listCreator(productTitle.value, userAmount.value);
-  //Empty inputs
-  productTitle.value = "";
-  userAmount.value = "";
-});
+    const li = document.createElement("li");
+
+    li.innerHTML = `
+      <div class="name">
+        <h4>${name}</h4>
+        <p>${new Date(date).toLocaleDateString()}</p>
+      </div>
+
+      <div class="amount ${type}">
+        <span>${formatter.format(amount * sign)}</span>
+      </div>
+    
+      <div class="action">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" onclick="deleteTransaction(${id})">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </div>
+    `;
+
+    list.appendChild(li);
+  });
+}
+
+function deleteTransaction(id) {
+  const index = transactions.findIndex((trx) => trx.id === id);
+  transactions.splice(index, 1);
+
+  updateTotal();
+  saveTransactions();
+  renderList();
+}
+
+function addTransaction(e) {
+  e.preventDefault();
+
+  const formData = new FormData(this);
+
+  transactions.push({
+    id: transactions.length + 1, // Generate a unique ID for the transaction
+    name: formData.get("name"),
+    amount: parseFloat(formData.get("amount")),
+    date: new Date(formData.get("date")),
+    type: formData.get("type") === "on" ? "income" : "expense",
+  });
+
+  this.reset();
+
+  updateTotal();
+  saveTransactions();
+  renderList();
+}
+
+function setBudget(e) {
+  e.preventDefault();
+
+  budget = parseFloat(budgetAmount.value) || 0;
+  localStorage.setItem("budget", budget);
+  budgetDisplay.textContent = `Budget: ${formatter.format(budget)}`;
+
+  updateTotal();
+}
+
+function saveTransactions() {
+  transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+  localStorage.setItem("transactions", JSON.stringify(transactions)); // Save transactions to local storage
+}
+
+// Initialize budget display and transactions list
+budgetDisplay.textContent = `Budget: ${formatter.format(budget)}`;
+
+renderList();
+updateTotal();
